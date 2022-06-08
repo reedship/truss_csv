@@ -1,0 +1,19 @@
+{
+  "name": "truss_csv",
+  "version": "1.0.0",
+  "description": "a CSV normalizer used in the interview process for Trussworks",
+  "main": "bin/index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^17.0.41",
+    "ts-node": "^10.8.1",
+    "typescript": "^4.7.3"
+  },
+  "scripts": {
+    "start": "ts-node index.ts"
+  },
+  "dependencies": {
+    "fast-csv": "^4.3.6",
+    "fs": "^0.0.1-security"
+  }
+}
