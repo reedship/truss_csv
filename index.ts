@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { parse } from "@fast-csv/parse";
 import { writeToPath } from "@fast-csv/format";
+import moment from 'moment-timezone';
 // Our input and output files will be passed in the 3rd and 4th argument
 if (process.argv.length < 4) {
   throw Error(
@@ -53,22 +54,21 @@ const getTotalDuration = (foo: string, bar: string): number => {
 };
 
 const convertDate = (input: string): string => {
-  try {
-    return new Date(input).toISOString();
-  } catch (err) {
-    console.log(input);
-    throw err;
-  }
+  let pacific = moment.tz(new Date(input), "America/Los_Angeles"); //  == PST
+  let eastern = pacific.tz("America/New_York"); //== EST
+  return eastern.toISOString();
 };
+
 const normalizeZIP = (input: string): string => {
   return input.padStart(5, "0");
 };
-//TODO:: make these functions
+
 const normalizeFullName = (input: string): string => {
   return input.toUpperCase();
 };
+
 const normalizeString = (input: string): string => {
-  return input;
+  return decodeURIComponent(input);
 };
 
 const writeDataToOutputFile = (array: []) => {
