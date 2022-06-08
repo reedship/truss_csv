@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse } from '@fast-csv/parse';
-
+import { writeToPath } from '@fast-csv/format';
 // Our input and output files will be passed in the 3rd and 4th argument
 if (process.argv.length < 4) {
   throw Error("Invalid arguments.\n Usage: 'npm start <inputFilePath> <outputFilePath>'");
@@ -9,17 +9,29 @@ if (process.argv.length < 4) {
 const [inputFilePath, outputFilePath] = process.argv.slice(2);
 
 type SampleRow = {
-  Timestamp: string, // format to RFC3339, convert from US/Pacific to US/Eastern (UTC time + 4 hours)
-  Address: string, //validate unicode, contains commas so ignore delimiters inside string value
-  ZIP: string, // if length < 5 assume 0 as prefix
-  FullName: string, // Convert to Uppercase
-  FooDuration: string, // in format HH:MM:SS.MS convert to total seconds
-  BarDuration: string, // same
-  TotalDuration: string, // FooDuration + BarDuration
-  Notes: string //validate unicode, replace invalid characters with the Unicode Replacement Character.
+  Timestamp: string,
+  Address: string,
+  ZIP: string,
+  FullName: string,
+  FooDuration: string,
+  BarDuration: string,
+  TotalDuration: string,
+  Notes: string
 }
+
+// Transformations Required:
+//
+// Timestamp: format to RFC3339, convert from US/Pacific to US/Eastern (UTC time + 4 hours)
+// Address: validate unicode, contains commas so ignore delimiters inside string value
+// ZIP:  if length < 5 assume 0 as prefix
+// FullName: Convert to Uppercase
+// FooDuration: in format HH:MM:SS.MS convert to total seconds
+// BarDuration: in format HH:MM:SS.MS convert to total seconds
+// TotalDuration: FooDuration + BarDuration
+// Notes: validate unicode, replace invalid characters with the Unicode Replacement Character.
+
 type TransformedRow = {
-  Timestamp: string, //RFC3339 format == Date().toISOString();
+  Timestamp: string,
   Address: string,
   ZIP: string,
   FullName: string,
@@ -29,8 +41,6 @@ type TransformedRow = {
   Notes: string
 }
 
-
-
 const convertDurationtoSeconds = (duration:string): number => {
     const [hours, minutes, seconds] = duration.split(':');
     return Number(hours) * 60 * 60 + Number(minutes) * 60 + Number(seconds);
@@ -39,7 +49,7 @@ const convertDurationtoSeconds = (duration:string): number => {
 const getTotalDuration = (foo: string, bar: string): number => {
   return convertDurationtoSeconds(foo) + convertDurationtoSeconds(bar);
 }
-//TODO:: make these functions
+
 const convertDate = (input: string): string => {
   try {
     return new Date(input).toISOString();
@@ -49,8 +59,9 @@ const convertDate = (input: string): string => {
   }
 }
 const normalizeZIP = (input: string) : string => {
-  return input;
+  return input.padStart(5,'0');
 }
+//TODO:: make these functions
 const normalizeFullName = (input: string) : string => {
   return input.toUpperCase();
 }
@@ -58,27 +69,41 @@ const normalizeString = (input: string) : string => {
   return input;
 }
 
-let parsed = fs.createReadStream(path.resolve(__dirname, inputFilePath))
+const writeDataToOutputFile = (array: []) => {
+  console.log(array);
+  writeToPath(path.resolve(__dirname, outputFilePath), array)
+    .on('error', err=> console.log(err))
+    .on('finish', ()=> console.log(`Completed writing output to ${outputFilePath}`));
+}
+
+const resultCsv: any = [];
+fs.createReadStream(path.resolve(__dirname, inputFilePath))
     .pipe(parse<SampleRow, TransformedRow>({
         headers: true,
         delimiter: ',',
         quote: '"',
+        ignoreEmpty: true,
     }))
     .transform(
-      (data: SampleRow): TransformedRow => ({
-        Timestamp: convertDate(data.Timestamp),
-        Address: data.Address,
-        ZIP: normalizeZIP(data.ZIP),
-        FullName: normalizeFullName(data.FullName),
-        FooDuration: convertDurationtoSeconds(data.FooDuration),
-        BarDuration: convertDurationtoSeconds(data.BarDuration),
-        TotalDuration: getTotalDuration(data.FooDuration, data.BarDuration),
-        Notes: normalizeString(data.Notes)
-      })
+      (data: SampleRow, cb): void => {
+        setImmediate(()=>
+          cb(null, {
+            Timestamp: convertDate(data.Timestamp),
+            Address: data.Address,
+            ZIP: normalizeZIP(data.ZIP),
+            FullName: normalizeFullName(data.FullName),
+            FooDuration: convertDurationtoSeconds(data.FooDuration),
+            BarDuration: convertDurationtoSeconds(data.BarDuration),
+            TotalDuration: getTotalDuration(data.FooDuration, data.BarDuration),
+            Notes: normalizeString(data.Notes)
+          }))
+      }
     )
     .on('error', error => console.error(error))
     .on('data', row => {
-      console.log(row);
-      // row.forEach((x:any)=>console.log(`${typeof x}: ${x}`));
+      resultCsv.push(Object.values(row));
     })
-    .on('end', (rowCount: number) => console.log(`Parsed ${rowCount} rows`));
+  .on('end', (rowCount: number) => {
+      console.log(`Parsed ${rowCount} rows`)
+      writeDataToOutputFile(resultCsv);
+  });
