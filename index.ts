@@ -2,25 +2,17 @@ import * as fs from "fs";
 import * as path from "path";
 import { parse } from "@fast-csv/parse";
 import { writeToPath } from "@fast-csv/format";
+import { SampleRow, TransformedRow } from './types';
 import moment from 'moment-timezone';
+
 // Our input and output files will be passed in the 3rd and 4th argument
-if (process.argv.length < 4) {
-  throw Error(
-    "Invalid arguments.\n Usage: 'npm start <inputFilePath> <outputFilePath>'"
-  );
+if (process.argv.length == 2){
+  process.argv[2] = 'sample.csv';
+  process.argv[3] = 'output.csv';
 }
 const [inputFilePath, outputFilePath] = process.argv.slice(2);
 
-type SampleRow = {
-  Timestamp: string;
-  Address: string;
-  ZIP: string;
-  FullName: string;
-  FooDuration: string;
-  BarDuration: string;
-  TotalDuration: string;
-  Notes: string;
-};
+
 
 // Transformations Required:
 //
@@ -33,16 +25,6 @@ type SampleRow = {
 // TotalDuration: FooDuration + BarDuration
 // Notes: validate unicode, replace invalid characters with the Unicode Replacement Character.
 
-type TransformedRow = {
-  Timestamp: string;
-  Address: string;
-  ZIP: string;
-  FullName: string;
-  FooDuration: number; // Number is stored as floating type so this datetype is fine
-  BarDuration: number;
-  TotalDuration: number;
-  Notes: string;
-};
 
 const convertDurationtoSeconds = (duration: string): number => {
   const [hours, minutes, seconds] = duration.split(":");
@@ -67,18 +49,28 @@ const normalizeFullName = (input: string): string => {
   return input.toUpperCase();
 };
 
-const normalizeString = (input: string): string => {
-  return decodeURIComponent(input);
-};
 
 const writeDataToOutputFile = (array: []) => {
   console.log(array);
-  writeToPath(path.resolve(__dirname, outputFilePath), array)
+  writeToPath(
+    path.resolve(__dirname, outputFilePath),
+    array,
+    {
+      headers: true,
+      delimiter: ",",
+      quote: '"',
+    },
+  )
     .on("error", (err) => console.log(err))
     .on("finish", () =>
       console.log(`Completed writing output to ${outputFilePath}`)
     );
 };
+
+// // this is a hacky way to do type checking on the passed in row, without declaring a verbose Type Guard.
+// const validateRow = (row:any): boolean => {
+//   return (['TransformedRow'].includes((typeof row).toString()));
+// }
 
 const resultCsv: any = [];
 fs.createReadStream(path.resolve(__dirname, inputFilePath))
@@ -90,6 +82,7 @@ fs.createReadStream(path.resolve(__dirname, inputFilePath))
       ignoreEmpty: true,
     })
   )
+  // .validate((data: any): void => { validateRow(data) })
   .transform((data: SampleRow, cb): void => {
     setImmediate(() =>
       cb(null, {
@@ -100,13 +93,16 @@ fs.createReadStream(path.resolve(__dirname, inputFilePath))
         FooDuration: convertDurationtoSeconds(data.FooDuration),
         BarDuration: convertDurationtoSeconds(data.BarDuration),
         TotalDuration: getTotalDuration(data.FooDuration, data.BarDuration),
-        Notes: normalizeString(data.Notes),
+        Notes: data.Notes,
       })
     );
   })
   .on("error", (error) => console.error(error))
   .on("data", (row) => {
     resultCsv.push(Object.values(row));
+  })
+  .on("data-invalid", (row:TransformedRow, rowNumber) => {
+        console.log(`Invalid [rowNumber=${rowNumber}] [row=${JSON.stringify(row)}]`)
   })
   .on("end", (rowCount: number) => {
     console.log(`Parsed ${rowCount} rows`);
