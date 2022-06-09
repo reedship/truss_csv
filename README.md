@@ -9,7 +9,8 @@ The [`./sample.csv`](./sample.csv) and [`sample-with-broken-utf8.csv`](./sample-
 ### Run using node
 1. clone this repository
 2. `cd truss_csv`
-3. `npm start [inputFilePath] [outputFilePath]`
+3. `npm install`
+4. `npm start [inputFilePath] [outputFilePath]`
 
 ### Run using docker-compose
 1. install `docker` and `docker-compose`
